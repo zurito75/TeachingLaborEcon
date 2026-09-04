@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>El problema de la urna — simulación interactiva</title>
+<style>
+  :root{
+    --azul:#1f4e79; --rojo:#e74c3c; --verde:#2ecc71; --gris:#6b7280; --gris-claro:#d0d3d8;
+    --fondo:#f7f8fa; --texto:#1f2937;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family:"Segoe UI", Arial, sans-serif; margin:0; padding:24px;
+    background:var(--fondo); color:var(--texto);
+  }
+  h1{font-size:1.4rem; margin:0 0 4px 0;}
+  .subtitulo{color:var(--gris); margin:0 0 20px 0; font-size:0.95rem;}
+  .layout{
+    display:grid; grid-template-columns: 320px 1fr; gap:24px; align-items:start;
+  }
+  @media (max-width: 900px){ .layout{grid-template-columns: 1fr;} }
+  .panel{
+    background:white; border-radius:12px; padding:18px 20px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.08);
+  }
+  .panel h2{font-size:1rem; margin:0 0 12px 0; color:var(--azul);}
+  .fila{margin-bottom:14px;}
+  .fila label{
+    display:flex; justify-content:space-between; font-size:0.86rem;
+    margin-bottom:4px;
+  }
+  .fila label span.valor{font-weight:600; color:var(--azul);}
+  input[type=range]{width:100%;}
+  .botones{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;}
+  button{
+    cursor:pointer; border:1px solid var(--azul); background:white; color:var(--azul);
+    border-radius:8px; padding:8px 12px; font-size:0.86rem; transition:0.15s;
+  }
+  button:hover{background:var(--azul); color:white;}
+  button.primario{background:var(--azul); color:white;}
+  button.primario:hover{background:#173d5e;}
+  button:disabled{opacity:0.4; cursor:not-allowed;}
+  button.activo{background:var(--verde); border-color:var(--verde); color:white;}
+  .botones.tamanos{gap:8px;}
+  .botones.tamanos button{flex:1 1 0; min-width:44px; text-align:center; font-weight:600;}
+  table{width:100%; border-collapse:collapse; font-size:0.9rem; margin-top:6px;}
+  td{padding:5px 2px; border-bottom:1px solid var(--gris-claro);}
+  td.etq{color:var(--gris);}
+  td.val{text-align:right; font-weight:700; font-size:1.05rem;}
+  .val.M{color:var(--verde);}
+  .val.D{color:var(--rojo);}
+  .leyenda{display:flex; gap:16px; flex-wrap:wrap; font-size:0.82rem; margin-top:12px; color:var(--gris);}
+  .leyenda span{display:inline-flex; align-items:center; gap:6px;}
+  .punto{width:12px; height:12px; border-radius:50%; display:inline-block; border:1px solid #333;}
+  .cuadro{width:12px; height:12px; display:inline-block; border:1px solid #333;}
+  svg{width:100%; height:auto; background:white; border-radius:10px;}
+  circle.bola{ transition: cx 0.55s ease, cy 0.55s ease, fill 0.3s ease; }
+  rect.urna{ transition: fill 0.3s ease; }
+  .nota{font-size:0.78rem; color:var(--gris); margin-top:12px; line-height:1.4;}
+  .terminado{color:var(--verde); font-weight:600;}
+</style>
+</head>
+<body>
+
+<h1>El problema de la urna: simulación de fallas de coordinación</h1>
+<p class="subtitulo">EC0734 Economía Laboral (EAFIT) — Semana 5. Versión interactiva de <code>UrnaFrictions.do</code>. Cada ronda, las bolas (trabajadores) que siguen buscando aplican al azar a una urna (vacante); si la urna ya está ocupada, la aplicación se desperdicia.</p>
+
+<div class="layout">
+
+  <div class="panel">
+    <h2>Controles</h2>
+    <div class="botones">
+      <button class="primario" id="btn_siguiente" onclick="siguienteRonda()">Siguiente ronda ▶</button>
+      <button id="btn_auto" onclick="alternarAuto()">Reproducir automático</button>
+      <button id="btn_reset" onclick="reiniciar()">Reiniciar ↺</button>
+    </div>
+
+    <div class="fila">
+      <label>Tamaño (urnas = bolas) <span class="valor" id="v_N"></span></label>
+      <div class="botones tamanos" id="botones_tamano">
+        <button class="tamano" data-n="2" onclick="elegirTamano(2)">2</button>
+        <button class="tamano" data-n="10" onclick="elegirTamano(10)">10</button>
+        <button class="tamano" data-n="20" onclick="elegirTamano(20)">20</button>
+        <button class="tamano" data-n="100" onclick="elegirTamano(100)">100</button>
+      </div>
+    </div>
+    <div class="fila">
+      <label>Velocidad de reproducción automática <span class="valor" id="v_vel"></span></label>
+      <input type="range" id="vel" min="300" max="2000" step="100">
+    </div>
+
+    <h2>Estado de la simulación</h2>
+    <table>
+      <tr><td class="etq">Ronda</td><td class="val" id="r_ronda">0</td></tr>
+      <tr><td class="etq">Emparejadas (M)</td><td class="val M" id="r_M">0</td></tr>
+      <tr><td class="etq">Buscando (D)</td><td class="val D" id="r_D">0</td></tr>
+    </table>
+    <p id="msg_terminado" class="terminado" style="display:none;">¡Pleno emparejamiento alcanzado!</p>
+
+    <p class="nota">
+      Modelo: en cada ronda, cada bola sin emparejar elige 1 de las V urnas al azar (con reemplazo).
+      Una urna vacía que recibe &ge;1 aplicación se llena (se acepta una al azar). El número esperado de
+      nuevos emparejamientos por ronda es M = V[1&minus;(1&minus;1/V)<sup>U<sub>buscando</sub></sup>]
+      &mdash; la misma fórmula derivada en las diapositivas de clase. Réplica exacta de la lógica de
+      <code>urna_frictions_sim.py</code>. Con <strong>2 urnas</strong> la coordinación falla con mucha
+      frecuencia (es fácil que ambas bolas apliquen a la misma urna); con <strong>100 urnas</strong> el
+      desperdicio relativo es menor y el proceso converge más parejo a la fórmula continua &mdash; compara
+      los distintos tamaños para ver el efecto de V sobre la velocidad de emparejamiento.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2>Urnas (vacantes) y bolas (trabajadores)</h2>
+    <svg id="lienzo" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="leyenda">
+      <span><span class="cuadro" style="background:#d0d3d8"></span> Urna vacía</span>
+      <span><span class="cuadro" style="background:#bfead1"></span> Urna llena</span>
+      <span><span class="punto" style="background:#e74c3c"></span> Bola buscando</span>
+      <span><span class="punto" style="background:#2ecc71"></span> Bola emparejada</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// Estado global de la simulación
+// ---------------------------------------------------------------
+const TAMANOS = [2, 10, 20, 100];
+let NActual = 100;
+let V, U;
+let llena, emparejada, objetivo, urnaDe;
+let ronda, posUrnas;
+let autoTimer = null;
+
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+let rng = mulberry32(41);
+
+function calcularPosicionesUrnas(n){
+  const ncol = Math.ceil(Math.sqrt(n));
+  const pos = [];
+  for (let i=0;i<n;i++){
+    const col = i % ncol;
+    const fila = Math.floor(i / ncol);
+    pos.push([col, fila]);
+  }
+  return {pos, ncol, nfila: Math.ceil(n/ncol)};
+}
+
+function iniciarSimulacion(){
+  V = U = NActual;
+  llena = new Array(V).fill(false);
+  emparejada = new Array(U).fill(false);
+  objetivo = new Array(U).fill(-1);
+  urnaDe = new Array(U).fill(-1);
+  ronda = 0;
+  const g = calcularPosicionesUrnas(V);
+  posUrnas = g.pos;
+  window._ncol = g.ncol; window._nfila = g.nfila;
+  document.getElementById("msg_terminado").style.display = "none";
+  construirSVG();
+  actualizarPosicionesBolas(true);
+  actualizarPanel();
+}
+
+function terminado(){
+  const M = emparejada.filter(Boolean).length;
+  return M === Math.min(U, V);
+}
+
+function siguienteRonda(){
+  if (terminado()) { pararAuto(); return; }
+
+  const buscando = [];
+  for (let i=0;i<U;i++) if(!emparejada[i]) buscando.push(i);
+
+  // Cada bola que busca aplica a una urna al azar
+  const aplicaciones = {}; // urna -> [indices de bolas]
+  for (const i of buscando){
+    const j = Math.floor(rng()*V);
+    objetivo[i] = j;
+    if (!aplicaciones[j]) aplicaciones[j] = [];
+    aplicaciones[j].push(i);
+  }
+
+  for (const jStr in aplicaciones){
+    const j = parseInt(jStr);
+    if (llena[j]) continue; // aplicaciones a urna ya llena se desperdician
+    const candidatos = aplicaciones[j];
+    const ganador = candidatos[Math.floor(rng()*candidatos.length)];
+    llena[j] = true;
+    emparejada[ganador] = true;
+    urnaDe[ganador] = j;
+  }
+
+  ronda += 1;
+  actualizarPosicionesBolas(false);
+  actualizarPanel();
+
+  if (terminado()){
+    document.getElementById("msg_terminado").style.display = "block";
+    pararAuto();
+  }
+}
+
+function reiniciar(){
+  pararAuto();
+  rng = mulberry32(Math.floor(Math.random()*100000));
+  iniciarSimulacion();
+}
+
+function elegirTamano(n){
+  if (n === NActual) return;
+  NActual = n;
+  actualizarBotonesTamano();
+  reiniciar();
+}
+
+function actualizarBotonesTamano(){
+  const botones = document.querySelectorAll("#botones_tamano button.tamano");
+  botones.forEach(b => {
+    b.classList.toggle("activo", parseInt(b.dataset.n) === NActual);
+  });
+}
+
+function alternarAuto(){
+  const btn = document.getElementById("btn_auto");
+  if (autoTimer){
+    pararAuto();
+  } else {
+    btn.classList.add("activo");
+    btn.textContent = "Detener ⏸";
+    const vel = parseInt(document.getElementById("vel").value);
+    autoTimer = setInterval(() => {
+      if (terminado()) { pararAuto(); return; }
+      siguienteRonda();
+    }, vel);
+  }
+}
+
+function pararAuto(){
+  if (autoTimer){ clearInterval(autoTimer); autoTimer = null; }
+  const btn = document.getElementById("btn_auto");
+  btn.classList.remove("activo");
+  btn.textContent = "Reproducir automático";
+}
+
+// ---------------------------------------------------------------
+// Dibujo (SVG)
+// ---------------------------------------------------------------
+const CELDA = 34, MARGEN = 20, ESPERA_ALTO = 90;
+
+function construirSVG(){
+  const ncol = window._ncol, nfila = window._nfila;
+  const anchoGrid = ncol*CELDA;
+  const altoGrid = nfila*CELDA;
+  const ancho = anchoGrid + 2*MARGEN;
+  const alto = altoGrid + 2*MARGEN + ESPERA_ALTO;
+
+  const svg = document.getElementById("lienzo");
+  svg.setAttribute("viewBox", `0 0 ${ancho} ${alto}`);
+  svg.innerHTML = "";
+
+  // Urnas
+  for (let j=0;j<V;j++){
+    const [col,fila] = posUrnas[j];
+    const x = MARGEN + col*CELDA + 3, y = MARGEN + fila*CELDA + 3;
+    const r = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    r.setAttribute("class","urna");
+    r.setAttribute("id","urna_"+j);
+    r.setAttribute("x", x); r.setAttribute("y", y);
+    r.setAttribute("width", CELDA-6); r.setAttribute("height", CELDA-6);
+    r.setAttribute("rx", 4);
+    r.setAttribute("fill", "#d0d3d8");
+    r.setAttribute("stroke", "#374151");
+    r.setAttribute("stroke-width", "1");
+    svg.appendChild(r);
+  }
+
+  // Bolas
+  for (let i=0;i<U;i++){
+    const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("class","bola");
+    c.setAttribute("id","bola_"+i);
+    c.setAttribute("r", 6.5);
+    c.setAttribute("fill", "#e74c3c");
+    c.setAttribute("stroke", "black");
+    c.setAttribute("stroke-width", "0.6");
+    svg.appendChild(c);
+  }
+
+  window._anchoGrid = anchoGrid; window._altoGrid = altoGrid;
+}
+
+function posCentroUrna(j){
+  const [col,fila] = posUrnas[j];
+  return [MARGEN + col*CELDA + CELDA/2, MARGEN + fila*CELDA + CELDA/2];
+}
+
+function actualizarPosicionesBolas(inicial){
+  const anchoGrid = window._anchoGrid, altoGrid = window._altoGrid;
+  for (let i=0;i<U;i++){
+    const c = document.getElementById("bola_"+i);
+    let x, y;
+    if (objetivo[i] === -1){
+      // zona de espera bajo la grilla
+      x = MARGEN + rng()*anchoGrid;
+      y = MARGEN + altoGrid + 20 + rng()*(ESPERA_ALTO-30);
+    } else {
+      const [cx, cy] = posCentroUrna(objetivo[i]);
+      if (emparejada[i]){
+        x = cx; y = cy;
+      } else {
+        x = cx + (rng()-0.5)*(CELDA*0.45);
+        y = cy + (rng()-0.5)*(CELDA*0.45);
+      }
+    }
+    c.setAttribute("cx", x);
+    c.setAttribute("cy", y);
+    c.setAttribute("fill", emparejada[i] ? "#2ecc71" : "#e74c3c");
+  }
+  for (let j=0;j<V;j++){
+    document.getElementById("urna_"+j).setAttribute("fill", llena[j] ? "#bfead1" : "#d0d3d8");
+  }
+}
+
+function actualizarPanel(){
+  const M = emparejada.filter(Boolean).length;
+  const D = U - M;
+  document.getElementById("r_ronda").textContent = ronda;
+  document.getElementById("r_M").textContent = M;
+  document.getElementById("r_D").textContent = D;
+  document.getElementById("v_N").textContent = `${U} urnas / ${U} bolas`;
+  document.getElementById("v_vel").textContent = document.getElementById("vel").value + " ms";
+}
+
+// ---------------------------------------------------------------
+// Controles
+// ---------------------------------------------------------------
+document.getElementById("vel").addEventListener("input", actualizarPanel);
+
+document.getElementById("vel").value = 700;
+actualizarBotonesTamano();
+
+iniciarSimulacion();
+</script>
+
+</body>
+</html>
