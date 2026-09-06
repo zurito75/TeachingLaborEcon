@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Hell's Kitchen y Gordita's Spring — DiD sobre la curva de Beveridge</title>
+<style>
+  :root{
+    --azul:#1f4e79; --rojo:#e74c3c; --verde:#2ecc71; --gris:#6b7280; --gris-claro:#d0d3d8;
+    --fondo:#f7f8fa; --texto:#1f2937;
+    --g-antes:#7fa8cc; --g-despues:#1f4e79; --h-antes:#f1948a; --h-despues:#a11a0a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family:"Segoe UI", Arial, sans-serif; margin:0; padding:24px;
+    background:var(--fondo); color:var(--texto);
+  }
+  h1{font-size:1.4rem; margin:0 0 4px 0;}
+  .subtitulo{color:var(--gris); margin:0 0 20px 0; font-size:0.95rem;}
+  .layout{
+    display:grid; grid-template-columns: 340px 1fr; gap:24px; align-items:start;
+  }
+  @media (max-width: 900px){ .layout{grid-template-columns: 1fr;} }
+  .panel{
+    background:white; border-radius:12px; padding:18px 20px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.08);
+  }
+  .panel h2{font-size:1rem; margin:0 0 12px 0; color:var(--azul);}
+  .pasos{display:flex; flex-direction:column; gap:8px; margin-bottom:16px;}
+  button{
+    cursor:pointer; border:1px solid var(--azul); background:white; color:var(--azul);
+    border-radius:8px; padding:9px 12px; font-size:0.86rem; transition:0.15s; text-align:left;
+  }
+  button:hover{background:#e8f0f8;}
+  button:disabled{opacity:0.45; cursor:not-allowed; background:white;}
+  button.activo{background:var(--azul); color:white;}
+  button.secundario{border-color:var(--gris-claro); color:var(--gris); text-align:center;}
+  button.secundario:hover{background:#eee;}
+  button.secundario.abierto{background:var(--verde); border-color:var(--verde); color:white;}
+  .modelo-formula{
+    font-family:"Consolas", monospace; font-size:0.78rem; color:var(--gris);
+    display:block; margin-top:2px;
+  }
+  .preguntas{font-size:0.86rem; line-height:1.5;}
+  .preguntas ol{padding-left:18px; margin:6px 0;}
+  table{width:100%; border-collapse:collapse; font-size:0.82rem; margin-top:10px;}
+  th, td{padding:4px 3px; border-bottom:1px solid var(--gris-claro); text-align:right;}
+  th:first-child, td:first-child{text-align:left;}
+  th{color:var(--gris); font-weight:600;}
+  td.sig{color:var(--verde); font-weight:700;}
+  .resumen{font-size:0.8rem; color:var(--gris); margin-top:8px;}
+  .leyenda{display:flex; gap:14px; flex-wrap:wrap; font-size:0.8rem; margin-top:12px; color:var(--gris);}
+  .leyenda span{display:inline-flex; align-items:center; gap:6px;}
+  .punto{width:11px; height:11px; border-radius:50%; display:inline-block; border:1px solid #333;}
+  svg{width:100%; height:auto; background:white; border-radius:10px;}
+  .nota{font-size:0.78rem; color:var(--gris); margin-top:14px; line-height:1.4;}
+  .coefs-caja{display:none; margin-top:4px;}
+  .coefs-caja.visible{display:block;}
+</style>
+</head>
+<body>
+
+<h1>Caso de estudio: Hell's Kitchen y Gordita's Spring</h1>
+<p class="subtitulo">EC0734 Economía Laboral (EAFIT) — Semana 5. Versión en Python/HTML de <code>HellKitchen.do</code> + <code>HellKitchenEstimation.do</code>. Datos ya simulados (semilla 41): dos mercados con función de emparejamiento de rendimientos constantes a escala; en Hell's Kitchen, después del período 15, se implementa una agencia de intermediación de empleo.</p>
+
+<div class="layout">
+
+  <div class="panel">
+    <h2>Preguntas guía</h2>
+    <div class="preguntas">
+      <ol>
+        <li>¿Es negativa la relación entre vacantes y desempleo en ambos mercados?</li>
+        <li>¿Cuál debería ser, en teoría, el efecto de la agencia de intermediación?</li>
+        <li>¿La curva se desplaza, rota, o ambas?</li>
+      </ol>
+    </div>
+
+    <h2>Pasos del análisis</h2>
+    <div class="pasos" id="pasos">
+      <button data-paso="0" onclick="irAPaso(0)">
+        Paso 0 — Nube de puntos
+        <span class="modelo-formula">(sin regresión todavía)</span>
+      </button>
+      <button data-paso="1" onclick="irAPaso(1)">
+        Paso 1 — Dispersión cruda
+        <span class="modelo-formula">reg tV tD</span>
+      </button>
+      <button data-paso="2" onclick="irAPaso(2)">
+        Paso 2 — Antes vs. después (pooled)
+        <span class="modelo-formula">reg tV tD post</span>
+      </button>
+      <button data-paso="3" onclick="irAPaso(3)">
+        Paso 3 — + mercado (intercepto por grupo)
+        <span class="modelo-formula">reg tV tD i.post##i.treat</span>
+      </button>
+      <button data-paso="4" onclick="irAPaso(4)">
+        Paso 4 — DiD completo (intercepto y pendiente)
+        <span class="modelo-formula">reg tV i.post##i.treat##c.tD</span>
+      </button>
+    </div>
+
+    <button class="secundario" id="btn_coefs" onclick="alternarCoefs()">Mostrar coeficientes ▾</button>
+    <p class="nota" style="margin-top:6px;">Sugerencia: antes de mostrar los coeficientes, pida a los estudiantes que predigan el signo de cada término nuevo.</p>
+
+    <div class="coefs-caja" id="caja_coefs">
+      <table id="tabla_coefs"></table>
+      <p class="resumen" id="resumen_modelo"></p>
+    </div>
+
+    <div class="leyenda" id="leyenda"></div>
+
+    <p class="nota" id="nota_paso"></p>
+  </div>
+
+  <div class="panel">
+    <h2>Vacantes (tV) vs. desempleo (tD)</h2>
+    <svg id="lienzo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 460"></svg>
+  </div>
+
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// Datos y resultados ya estimados en Python (hell_kitchen_sim.py)
+// con statsmodels sobre Inputs/Hells.dta (semilla 41). No se vuelve
+// a estimar nada en el navegador -- estos números fueron verificados
+// contra la salida de `python hell_kitchen_sim.py` antes de entregar
+// esta página.
+// ---------------------------------------------------------------
+const EXPORT = {"datos": [{"tD": 8.634, "tV": 8.646, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 8.899, "tV": 7.557, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 3.604, "tV": 7.809, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 4.156, "tV": 8.646, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 9.3, "tV": 7.567, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 8.296, "tV": 8.83, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 1.792, "tV": 10.34, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 2.807, "tV": 6.736, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 2.088, "tV": 8.494, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 8.655, "tV": 8.541, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 1.6, "tV": 9.923, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 7.42, "tV": 8.937, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 7.047, "tV": 8.251, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 1.175, "tV": 10.072, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 7.502, "tV": 8.323, "market": "Gordita", "post": 0, "treat": 0, "grupo": "gordita_antes"}, {"tD": 2.33, "tV": 8.542, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 7.058, "tV": 8.182, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 7.213, "tV": 8.859, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 3.593, "tV": 8.245, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 7.527, "tV": 7.871, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 6.979, "tV": 8.533, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 3.701, "tV": 8.073, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 1.271, "tV": 9.855, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 2.863, "tV": 10.056, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 2.077, "tV": 9.735, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 0.345, "tV": 9.24, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 2.499, "tV": 10.349, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 0.322, "tV": 9.889, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 4.582, "tV": 8.634, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 3.496, "tV": 9.754, "market": "Gordita", "post": 1, "treat": 0, "grupo": "gordita_despues"}, {"tD": 9.963, "tV": 8.375, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 6.449, "tV": 8.525, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 3.347, "tV": 9.971, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 0.889, "tV": 8.977, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 8.234, "tV": 9.173, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 4.98, "tV": 9.788, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 2.153, "tV": 10.428, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 1.514, "tV": 10.738, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 9.452, "tV": 7.096, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 0.471, "tV": 9.636, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 7.893, "tV": 7.489, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 9.638, "tV": 7.212, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 3.067, "tV": 8.368, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 3.81, "tV": 8.511, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 9.43, "tV": 9.073, "market": "Hells", "post": 0, "treat": 1, "grupo": "hells_antes"}, {"tD": 2.131, "tV": 5.786, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 9.249, "tV": 1.073, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 4.2, "tV": 5.739, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 3.362, "tV": 5.254, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 2.523, "tV": 6.595, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 9.503, "tV": 2.208, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 6.202, "tV": 3.512, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 0.48, "tV": 8.634, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 5.331, "tV": 4.358, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 5.626, "tV": 4.847, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 4.368, "tV": 6.888, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 8.01, "tV": 1.782, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 6.179, "tV": 3.669, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 0.21, "tV": 9.365, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}, {"tD": 2.94, "tV": 6.975, "market": "Hells", "post": 1, "treat": 1, "grupo": "hells_despues"}], "modelos": {"M1": {"r2": 0.1754, "n": 60, "terms": [{"term": "Intercept", "coef": 9.3732, "se": 0.49, "p": 0.0}, {"term": "tD", "coef": -0.3025, "se": 0.0861, "p": 0.0009}]}, "M2": {"r2": 0.4079, "n": 60, "terms": [{"term": "Intercept", "coef": 10.8052, "se": 0.5168, "p": 0.0}, {"term": "tD", "coef": -0.3782, "se": 0.0753, "p": 0.0}, {"term": "post", "coef": -2.1311, "se": 0.4505, "p": 0.0}]}, "M3": {"r2": 0.7577, "n": 60, "terms": [{"term": "Intercept", "coef": 10.3843, "se": 0.3961, "p": 0.0}, {"term": "C(post)[T.1]", "coef": -0.114, "se": 0.4151, "p": 0.7847}, {"term": "C(treat)[T.1]", "coef": 0.2759, "se": 0.4055, "p": 0.4991}, {"term": "C(post)[T.1]:C(treat)[T.1]", "coef": -3.9031, "se": 0.5758, "p": 0.0}, {"term": "tD", "coef": -0.3265, "se": 0.0494, "p": 0.0}]}, "M4": {"r2": 0.8785, "n": 60, "terms": [{"term": "Intercept", "coef": 9.3314, "se": 0.4371, "p": 0.0}, {"term": "C(post)[T.1]", "coef": 0.5314, "se": 0.5842, "p": 0.3672}, {"term": "C(treat)[T.1]", "coef": 0.7138, "se": 0.5899, "p": 0.2317}, {"term": "C(post)[T.1]:C(treat)[T.1]", "coef": -1.7173, "se": 0.8165, "p": 0.0403}, {"term": "tD", "coef": -0.1362, "se": 0.0694, "p": 0.0552}, {"term": "C(post)[T.1]:tD", "coef": -0.0809, "se": 0.1118, "p": 0.4727}, {"term": "C(treat)[T.1]:tD", "coef": -0.0769, "se": 0.0932, "p": 0.4131}, {"term": "C(post)[T.1]:C(treat)[T.1]:tD", "coef": -0.5053, "se": 0.1485, "p": 0.0013}]}}, "lineas": {"M1": [{"grupo": "todos", "x0": 0.21, "y0": 9.31, "x1": 9.963, "y1": 6.359}], "M2": [{"grupo": "post0", "x0": 0.471, "y0": 10.627, "x1": 9.963, "y1": 7.037}, {"grupo": "post1", "x0": 0.21, "y0": 8.595, "x1": 9.503, "y1": 5.08}], "M3": [{"grupo": "gordita_antes", "x0": 1.175, "y0": 10.001, "x1": 9.3, "y1": 7.348}, {"grupo": "gordita_despues", "x0": 0.322, "y0": 10.165, "x1": 7.527, "y1": 7.813}, {"grupo": "hells_antes", "x0": 0.471, "y0": 10.506, "x1": 9.963, "y1": 7.407}, {"grupo": "hells_despues", "x0": 0.21, "y0": 6.575, "x1": 9.503, "y1": 3.54}], "M4": [{"grupo": "gordita_antes", "x0": 1.175, "y0": 9.171, "x1": 9.3, "y1": 8.065}, {"grupo": "gordita_despues", "x0": 0.322, "y0": 9.793, "x1": 7.527, "y1": 8.229}, {"grupo": "hells_antes", "x0": 0.471, "y0": 9.945, "x1": 9.963, "y1": 7.923}, {"grupo": "hells_despues", "x0": 0.21, "y0": 8.691, "x1": 9.503, "y1": 1.264}]}}
+;
+
+const COLOR = {
+  gordita: "#1f4e79", hells: "#a11a0a",
+  todos: "#6b7280", post0: "#9ca3af", post1: "#374151",
+  gordita_antes: "#7fa8cc", gordita_despues: "#1f4e79",
+  hells_antes: "#f1948a", hells_despues: "#a11a0a",
+};
+
+const ETIQUETA_TERMINO = {
+  "Intercept": "Intercepto",
+  "tD": "tD",
+  "post": "Post (después)",
+  "C(post)[T.1]": "Post (después)",
+  "C(treat)[T.1]": "Hells (tratamiento)",
+  "C(post)[T.1]:C(treat)[T.1]": "Post × Hells",
+  "C(post)[T.1]:tD": "Post × tD",
+  "C(treat)[T.1]:tD": "Hells × tD",
+  "C(post)[T.1]:C(treat)[T.1]:tD": "Post × Hells × tD",
+};
+
+const LEYENDAS_PASO = {
+  0: [["gordita","Gordita's Spring"],["hells","Hell's Kitchen"]],
+  1: [["todos","Todos los puntos"]],
+  2: [["post0","Antes (pooled)"],["post1","Después (pooled)"]],
+  3: [["gordita_antes","Gordita antes"],["gordita_despues","Gordita después"],["hells_antes","Hells antes"],["hells_despues","Hells después"]],
+  4: [["gordita_antes","Gordita antes"],["gordita_despues","Gordita después"],["hells_antes","Hells antes"],["hells_despues","Hells después"]],
+};
+
+const NOTAS_PASO = {
+  0: "Antes de estimar nada: la nube de puntos de los dos mercados, sin ninguna línea ajustada. Mire con calma — ¿ya se intuye una relación negativa entre vacantes y desempleo? ¿se distingue a simple vista Gordita's Spring de Hell's Kitchen, o están mezclados?",
+  1: "Una sola línea para los 60 datos, ignorando mercado y período: ya se ve la relación negativa vacantes–desempleo, pero mezcla ambos mercados y ambos períodos.",
+  2: "Se permite un intercepto distinto en el período 'después', pero agrupando ambos mercados: como solo Hell's Kitchen recibió la política, esta comparación todavía no aísla su efecto.",
+  3: "Se agrega un intercepto propio para cada combinación mercado×período (Gordita/Hells, antes/después), pero la pendiente sigue siendo la misma para los cuatro grupos: esto captura un desplazamiento paralelo, no una rotación.",
+  4: "DiD completo: intercepto Y pendiente distintos por grupo. El coeficiente triple (Post×Hells×tD) es el que identifica si la agencia de intermediación, además de desplazar, rota la curva de Hell's Kitchen — compare la pendiente de 'Hells después' con las otras tres.",
+};
+
+let pasoActual = 1;
+let coefsVisibles = false;
+
+function irAPaso(p){
+  pasoActual = p;
+  document.querySelectorAll("#pasos button").forEach(b => {
+    b.classList.toggle("activo", parseInt(b.dataset.paso) === p);
+  });
+  dibujarLeyenda();
+  dibujarGrafico();
+  dibujarTabla();
+  document.getElementById("nota_paso").textContent = NOTAS_PASO[p];
+
+  const btnCoefs = document.getElementById("btn_coefs");
+  if (p === 0){
+    coefsVisibles = false;
+    document.getElementById("caja_coefs").classList.remove("visible");
+    btnCoefs.disabled = true;
+    btnCoefs.textContent = "Sin regresión en este paso";
+    btnCoefs.classList.remove("abierto");
+  } else {
+    btnCoefs.disabled = false;
+    btnCoefs.textContent = coefsVisibles ? "Ocultar coeficientes ▴" : "Mostrar coeficientes ▾";
+  }
+}
+
+function alternarCoefs(){
+  if (pasoActual === 0) return;
+  coefsVisibles = !coefsVisibles;
+  document.getElementById("caja_coefs").classList.toggle("visible", coefsVisibles);
+  document.getElementById("btn_coefs").textContent = coefsVisibles ? "Ocultar coeficientes ▴" : "Mostrar coeficientes ▾";
+  document.getElementById("btn_coefs").classList.toggle("abierto", coefsVisibles);
+}
+
+function dibujarLeyenda(){
+  const cont = document.getElementById("leyenda");
+  cont.innerHTML = "";
+  for (const [clave, etiqueta] of LEYENDAS_PASO[pasoActual]){
+    const span = document.createElement("span");
+    span.innerHTML = `<span class="punto" style="background:${COLOR[clave]}"></span> ${etiqueta}`;
+    cont.appendChild(span);
+  }
+}
+
+function dibujarTabla(){
+  if (pasoActual === 0){
+    document.getElementById("tabla_coefs").innerHTML = "";
+    document.getElementById("resumen_modelo").textContent = "";
+    return;
+  }
+  const modelo = EXPORT.modelos["M" + pasoActual];
+  const tabla = document.getElementById("tabla_coefs");
+  let html = "<tr><th>Término</th><th>Coef.</th><th>E.E.</th><th>p</th></tr>";
+  for (const t of modelo.terms){
+    const etiqueta = ETIQUETA_TERMINO[t.term] || t.term;
+    const sig = t.p < 0.05 ? ' class="sig"' : '';
+    html += `<tr><td>${etiqueta}</td><td${sig}>${t.coef.toFixed(4)}</td><td>${t.se.toFixed(4)}</td><td${sig}>${t.p.toFixed(4)}</td></tr>`;
+  }
+  tabla.innerHTML = html;
+  document.getElementById("resumen_modelo").textContent = `R² = ${modelo.r2.toFixed(4)}  |  n = ${modelo.n}  (verde: p < 0.05)`;
+}
+
+// ---------------------------------------------------------------
+// Dibujo del dispersograma (SVG, sin librerías externas)
+// ---------------------------------------------------------------
+const ANCHO = 640, ALTO = 460, MARGEN = {izq:46, der:16, arriba:16, abajo:40};
+const X_MIN = 0, X_MAX = 10.5, Y_MIN = 0, Y_MAX = 12;
+
+function esc(x){ return MARGEN.izq + (x - X_MIN) / (X_MAX - X_MIN) * (ANCHO - MARGEN.izq - MARGEN.der); }
+function esy(y){ return ALTO - MARGEN.abajo - (y - Y_MIN) / (Y_MAX - Y_MIN) * (ALTO - MARGEN.abajo - MARGEN.arriba); }
+
+function dibujarGrafico(){
+  const svg = document.getElementById("lienzo");
+  svg.innerHTML = "";
+  const ns = "http://www.w3.org/2000/svg";
+
+  // Ejes
+  const ejeX = document.createElementNS(ns,"line");
+  ejeX.setAttribute("x1", esc(X_MIN)); ejeX.setAttribute("x2", esc(X_MAX));
+  ejeX.setAttribute("y1", esy(Y_MIN)); ejeX.setAttribute("y2", esy(Y_MIN));
+  ejeX.setAttribute("stroke","#374151");
+  svg.appendChild(ejeX);
+  const ejeY = document.createElementNS(ns,"line");
+  ejeY.setAttribute("x1", esc(X_MIN)); ejeY.setAttribute("x2", esc(X_MIN));
+  ejeY.setAttribute("y1", esy(Y_MIN)); ejeY.setAttribute("y2", esy(Y_MAX));
+  ejeY.setAttribute("stroke","#374151");
+  svg.appendChild(ejeY);
+
+  for (let v=0; v<=10; v+=2){
+    const t = document.createElementNS(ns,"text");
+    t.setAttribute("x", esc(v)); t.setAttribute("y", esy(Y_MIN)+16);
+    t.setAttribute("font-size","10"); t.setAttribute("fill","#6b7280"); t.setAttribute("text-anchor","middle");
+    t.textContent = v; svg.appendChild(t);
+  }
+  for (let v=0; v<=12; v+=2){
+    const t = document.createElementNS(ns,"text");
+    t.setAttribute("x", esc(X_MIN)-8); t.setAttribute("y", esy(v)+3);
+    t.setAttribute("font-size","10"); t.setAttribute("fill","#6b7280"); t.setAttribute("text-anchor","end");
+    t.textContent = v; svg.appendChild(t);
+  }
+  const etqX = document.createElementNS(ns,"text");
+  etqX.setAttribute("x", (esc(X_MIN)+esc(X_MAX))/2); etqX.setAttribute("y", ALTO-6);
+  etqX.setAttribute("font-size","11"); etqX.setAttribute("fill","#374151"); etqX.setAttribute("text-anchor","middle");
+  etqX.textContent = "tD (desempleo)"; svg.appendChild(etqX);
+  const etqY = document.createElementNS(ns,"text");
+  etqY.setAttribute("x", -(esy(Y_MIN)+esy(Y_MAX))/2); etqY.setAttribute("y", 12);
+  etqY.setAttribute("font-size","11"); etqY.setAttribute("fill","#374151"); etqY.setAttribute("text-anchor","middle");
+  etqY.setAttribute("transform","rotate(-90)");
+  etqY.textContent = "tV (vacantes)"; svg.appendChild(etqY);
+
+  // Puntos
+  for (const d of EXPORT.datos){
+    let clave;
+    if (pasoActual === 0) clave = d.market === "Gordita" ? "gordita" : "hells";
+    else if (pasoActual === 1) clave = "todos";
+    else if (pasoActual === 2) clave = d.post === 0 ? "post0" : "post1";
+    else clave = d.grupo;
+    const c = document.createElementNS(ns,"circle");
+    c.setAttribute("cx", esc(d.tD)); c.setAttribute("cy", esy(d.tV));
+    c.setAttribute("r", 4.5);
+    c.setAttribute("fill", COLOR[clave]);
+    c.setAttribute("stroke","#1f2937"); c.setAttribute("stroke-width","0.5"); c.setAttribute("opacity","0.85");
+    svg.appendChild(c);
+  }
+
+  // Líneas ajustadas (el paso 0 todavía no tiene regresión)
+  if (pasoActual === 0) return;
+  const lineas = EXPORT.lineas["M" + pasoActual];
+  for (const l of lineas){
+    const clave = pasoActual === 1 ? "todos" : l.grupo;
+    const linea = document.createElementNS(ns,"line");
+    linea.setAttribute("x1", esc(l.x0)); linea.setAttribute("y1", esy(l.y0));
+    linea.setAttribute("x2", esc(l.x1)); linea.setAttribute("y2", esy(l.y1));
+    linea.setAttribute("stroke", COLOR[clave]);
+    linea.setAttribute("stroke-width", "2.4");
+    svg.appendChild(linea);
+  }
+}
+
+irAPaso(0);
+</script>
+
+</body>
+</html>
