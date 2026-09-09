@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Modelo DMP — Estática comparativa de estado estacionario</title>
+<style>
+  :root{
+    --azul:#1f4e79; --rojo:#c0392b; --gris:#6b7280; --gris-claro:#e5e7eb;
+    --fondo:#f7f8fa; --texto:#1f2937;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family:"Segoe UI", Arial, sans-serif; margin:0; padding:24px;
+    background:var(--fondo); color:var(--texto);
+  }
+  h1{font-size:1.4rem; margin:0 0 4px 0;}
+  .subtitulo{color:var(--gris); margin:0 0 20px 0; font-size:0.95rem;}
+  .layout{
+    display:grid; grid-template-columns: 380px 1fr; gap:24px; align-items:start;
+  }
+  @media (max-width: 900px){ .layout{grid-template-columns: 1fr;} }
+  .panel{
+    background:white; border-radius:12px; padding:18px 20px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.08);
+  }
+  .panel h2{font-size:1rem; margin:0 0 12px 0; color:var(--azul);}
+  .fila{margin-bottom:14px;}
+  .fila label{
+    display:flex; justify-content:space-between; font-size:0.86rem;
+    margin-bottom:4px;
+  }
+  .fila label span.valor{font-weight:600; color:var(--azul);}
+  input[type=range]{width:100%;}
+  .escenarios{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px;}
+  button{
+    cursor:pointer; border:1px solid var(--azul); background:white; color:var(--azul);
+    border-radius:8px; padding:6px 10px; font-size:0.82rem; transition:0.15s;
+  }
+  button:hover{background:var(--azul); color:white;}
+  button.primario{background:var(--azul); color:white;}
+  button.primario:hover{background:#173d5e;}
+  table{width:100%; border-collapse:collapse; font-size:0.86rem; margin-top:6px;}
+  td{padding:4px 2px; border-bottom:1px solid var(--gris-claro);}
+  td.etq{color:var(--gris);}
+  td.val{text-align:right; font-weight:600; color:var(--azul);}
+  .leyenda{display:flex; gap:16px; flex-wrap:wrap; font-size:0.82rem; margin-top:10px; color:var(--gris);}
+  .leyenda span{display:inline-flex; align-items:center; gap:6px;}
+  .caja{width:14px; height:3px; display:inline-block;}
+  svg{width:100%; height:auto; background:white; border-radius:10px;}
+  .nota{font-size:0.78rem; color:var(--gris); margin-top:10px; line-height:1.4;}
+</style>
+</head>
+<body>
+
+<h1>El modelo DMP: estática comparativa de estado estacionario</h1>
+<p class="subtitulo">EC0734 Economía Laboral (EAFIT) — Semana 5, Modelos de búsqueda. Mueva los deslizadores o pruebe los escenarios predefinidos para ver cómo se desplaza la curva de Beveridge y la curva de creación de empleo.</p>
+
+<div class="layout">
+
+  <div class="panel">
+    <h2>Escenarios predefinidos</h2>
+    <div class="escenarios">
+      <button class="primario" onclick="aplicarEscenario('base')">Línea base</button>
+      <button onclick="aplicarEscenario('A')">−30% eficiencia $A$</button>
+      <button onclick="aplicarEscenario('vt')">−30% productividad</button>
+      <button onclick="aplicarEscenario('b')">+50% beneficios</button>
+    </div>
+
+    <h2>Parámetros</h2>
+
+    <div class="fila">
+      <label>Eficiencia de emparejamiento, <i>A</i> <span class="valor" id="v_A"></span></label>
+      <input type="range" id="A" min="0.15" max="0.50" step="0.005">
+    </div>
+    <div class="fila">
+      <label>Productividad laboral, <i>&#x1D717;</i> <span class="valor" id="v_vt"></span></label>
+      <input type="range" id="vt" min="0.50" max="1.50" step="0.01">
+    </div>
+    <div class="fila">
+      <label>Beneficios de desempleo, <i>b</i> <span class="valor" id="v_b"></span></label>
+      <input type="range" id="b" min="0.10" max="0.95" step="0.01">
+    </div>
+    <div class="fila">
+      <label>Poder de negociación, <i>&eta;</i> <span class="valor" id="v_eta"></span></label>
+      <input type="range" id="eta" min="0.05" max="0.95" step="0.01">
+    </div>
+    <div class="fila">
+      <label>Prob. de permanecer emparejado, <i>&rho;</i> <span class="valor" id="v_rho"></span></label>
+      <input type="range" id="rho" min="0.85" max="0.995" step="0.001">
+    </div>
+    <div class="fila">
+      <label>Elasticidad de la función de emparejamiento, <i>&sigma;</i> <span class="valor" id="v_sigma"></span></label>
+      <input type="range" id="sigma" min="0.20" max="0.80" step="0.01">
+    </div>
+    <div class="fila">
+      <label>Costo de publicar una vacante, <i>c</i> <span class="valor" id="v_c"></span></label>
+      <input type="range" id="c" min="0.05" max="0.60" step="0.01">
+    </div>
+    <div class="fila">
+      <label>Factor de descuento (mensual), <i>&beta;</i> <span class="valor" id="v_beta"></span></label>
+      <input type="range" id="beta" min="0.95" max="0.999" step="0.001">
+    </div>
+
+    <button onclick="resetear()">Restablecer parámetros base</button>
+  </div>
+
+  <div class="panel">
+    <h2>Espacio (desempleo, vacantes)</h2>
+    <svg id="grafico" viewBox="0 0 640 480" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="leyenda">
+      <span><span class="caja" style="background:var(--azul)"></span> Beveridge (actual)</span>
+      <span><span class="caja" style="background:var(--azul); opacity:0.45"></span> Creación de empleo (actual)</span>
+      <span><span class="caja" style="background:var(--gris); border-top:2px dashed var(--gris); background:none"></span> Línea base (referencia)</span>
+    </div>
+
+    <h2 style="margin-top:20px;">Equilibrio de estado estacionario</h2>
+    <table>
+      <tr><td class="etq">Tightness, &theta;* = v*/u*</td><td class="val" id="r_theta"></td></tr>
+      <tr><td class="etq">Desempleo, u*</td><td class="val" id="r_u"></td></tr>
+      <tr><td class="etq">Vacantes, v*</td><td class="val" id="r_v"></td></tr>
+      <tr><td class="etq">Tasa de encuentro (trabajador), f* = A&theta;*^(1-&sigma;)</td><td class="val" id="r_f"></td></tr>
+      <tr><td class="etq">Tasa de encuentro (firma), q* = A&theta;*^(-&sigma;)</td><td class="val" id="r_q"></td></tr>
+    </table>
+    <p class="nota">
+      Curva de Beveridge: v(u) = [(1&minus;&rho;)(1&minus;u)]<sup>1/(1&minus;&sigma;)</sup> / (A·u<sup>&sigma;</sup>)<sup>1/(1&minus;&sigma;)</sup>.
+      Curva de creación de empleo (estado estacionario): recta v = &theta;*·u, donde &theta;* resuelve
+      c&theta;<sup>&sigma;</sup>(1&minus;&beta;&rho;)/(A&beta;) + c&eta;&theta; = (1&minus;&eta;)(&#x1D717;&minus;b).
+      Herramienta construida a partir de <code>dmp_model.py</code> (mismas ecuaciones, verificadas contra la calibración de Trabandt).
+    </p>
+  </div>
+
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// Parámetros base (calibración mensual de Trabandt)
+// ---------------------------------------------------------------
+const BASE = { A: 0.30, vt: 1.00, b: 0.40, eta: 0.50, rho: 0.97, sigma: 0.50, c: 0.20, beta: Math.pow(0.98, 1/12) };
+
+const sliders = ["A","vt","b","eta","rho","sigma","c","beta"];
+
+function leerParametros(){
+  const p = {};
+  sliders.forEach(k => p[k] = parseFloat(document.getElementById(k).value));
+  return p;
+}
+
+function fijarParametros(p){
+  sliders.forEach(k => document.getElementById(k).value = p[k]);
+  actualizarEtiquetas(p);
+  dibujar();
+}
+
+function actualizarEtiquetas(p){
+  document.getElementById("v_A").textContent = p.A.toFixed(3);
+  document.getElementById("v_vt").textContent = p.vt.toFixed(2);
+  document.getElementById("v_b").textContent = p.b.toFixed(2);
+  document.getElementById("v_eta").textContent = p.eta.toFixed(2);
+  document.getElementById("v_rho").textContent = p.rho.toFixed(3);
+  document.getElementById("v_sigma").textContent = p.sigma.toFixed(2);
+  document.getElementById("v_c").textContent = p.c.toFixed(2);
+  document.getElementById("v_beta").textContent = p.beta.toFixed(4);
+}
+
+// ---------------------------------------------------------------
+// Ecuaciones del modelo (mismas fórmulas cerradas que dmp_model.py)
+// ---------------------------------------------------------------
+
+function curvaBeveridge(u, p){
+  const expo = 1/(1-p.sigma);
+  return Math.pow((1-p.rho)*(1-u), expo) / Math.pow(p.A * Math.pow(u, p.sigma), expo);
+}
+
+function Ftheta(theta, p){
+  const term1 = p.c * Math.pow(theta, p.sigma) * (1 - p.beta*p.rho) / (p.A*p.beta);
+  const term2 = p.c * p.eta * theta;
+  const term3 = (1-p.eta) * (p.vt - p.b);
+  return term1 + term2 - term3;
+}
+
+function resolverTheta(p){
+  // bisección: F es creciente en theta, F(0+)<0 (si vt>b), buscamos raíz positiva
+  let lo = 1e-6, hi = 200;
+  let flo = Ftheta(lo, p), fhi = Ftheta(hi, p);
+  // si incluso en hi sigue siendo negativo, ampliar (caso extremo)
+  let intentos = 0;
+  while (fhi < 0 && intentos < 10){ hi *= 2; fhi = Ftheta(hi, p); intentos++; }
+  for (let i=0; i<80; i++){
+    const mid = 0.5*(lo+hi);
+    const fm = Ftheta(mid, p);
+    if (fm > 0) hi = mid; else lo = mid;
+  }
+  return 0.5*(lo+hi);
+}
+
+function equilibrio(p){
+  const theta = resolverTheta(p);
+  const u = (1-p.rho) / ((1-p.rho) + p.A*Math.pow(theta, 1-p.sigma));
+  const v = theta*u;
+  const f = p.A*Math.pow(theta, 1-p.sigma);
+  const q = p.A*Math.pow(theta, -p.sigma);
+  return {theta, u, v, f, q};
+}
+
+// ---------------------------------------------------------------
+// Dibujo del gráfico (SVG plano, sin librerías externas)
+// ---------------------------------------------------------------
+const U_MIN = 0.015, U_MAX = 0.20;
+const margen = {izq:60, der:20, arr:20, aba:50};
+const anchoTotal = 640, altoTotal = 480;
+const anchoGraf = anchoTotal - margen.izq - margen.der;
+const altoGraf = altoTotal - margen.arr - margen.aba;
+
+function construirCurva(p, nPuntos=200){
+  const pts = [];
+  for (let i=0;i<=nPuntos;i++){
+    const u = U_MIN + (U_MAX-U_MIN)*i/nPuntos;
+    pts.push([u, curvaBeveridge(u,p)]);
+  }
+  return pts;
+}
+
+function dibujar(){
+  const p = leerParametros();
+  actualizarEtiquetas(p);
+
+  const eq = equilibrio(p);
+  const eqBase = equilibrio(BASE);
+
+  const bev = construirCurva(p);
+  const bevBase = construirCurva(BASE);
+
+  // eje y: escala según el máximo relevante
+  const vMax = Math.max(
+    bev[0][1], bevBase[0][1], eq.theta*U_MAX, eqBase.theta*U_MAX, eq.v*1.3, eqBase.v*1.3
+  );
+  const V_MAX = Math.min(vMax*1.05, 3.0);
+
+  const xEsc = u => margen.izq + (u-U_MIN)/(U_MAX-U_MIN) * anchoGraf;
+  const yEsc = v => margen.arr + altoGraf - (v/V_MAX) * altoGraf;
+
+  const pathBev = bev.map((pt,i) => (i===0?"M":"L") + xEsc(pt[0]).toFixed(2) + "," + yEsc(Math.min(pt[1],V_MAX)).toFixed(2)).join(" ");
+  const pathBevBase = bevBase.map((pt,i) => (i===0?"M":"L") + xEsc(pt[0]).toFixed(2) + "," + yEsc(Math.min(pt[1],V_MAX)).toFixed(2)).join(" ");
+
+  const pathCreacion = `M${xEsc(U_MIN).toFixed(2)},${yEsc(Math.min(eq.theta*U_MIN,V_MAX)).toFixed(2)} L${xEsc(U_MAX).toFixed(2)},${yEsc(Math.min(eq.theta*U_MAX,V_MAX)).toFixed(2)}`;
+  const pathCreacionBase = `M${xEsc(U_MIN).toFixed(2)},${yEsc(Math.min(eqBase.theta*U_MIN,V_MAX)).toFixed(2)} L${xEsc(U_MAX).toFixed(2)},${yEsc(Math.min(eqBase.theta*U_MAX,V_MAX)).toFixed(2)}`;
+
+  // ejes y grilla
+  let ejes = "";
+  const nTicksX = 6, nTicksY = 5;
+  for (let i=0;i<=nTicksX;i++){
+    const u = U_MIN + (U_MAX-U_MIN)*i/nTicksX;
+    const x = xEsc(u);
+    ejes += `<line x1="${x}" y1="${margen.arr}" x2="${x}" y2="${margen.arr+altoGraf}" stroke="#eee"/>`;
+    ejes += `<text x="${x}" y="${margen.arr+altoGraf+18}" font-size="11" text-anchor="middle" fill="#6b7280">${u.toFixed(2)}</text>`;
+  }
+  for (let i=0;i<=nTicksY;i++){
+    const v = V_MAX*i/nTicksY;
+    const y = yEsc(v);
+    ejes += `<line x1="${margen.izq}" y1="${y}" x2="${margen.izq+anchoGraf}" y2="${y}" stroke="#eee"/>`;
+    ejes += `<text x="${margen.izq-8}" y="${y+4}" font-size="11" text-anchor="end" fill="#6b7280">${v.toFixed(2)}</text>`;
+  }
+
+  const svg = `
+    <rect x="0" y="0" width="${anchoTotal}" height="${altoTotal}" fill="white"/>
+    ${ejes}
+    <line x1="${margen.izq}" y1="${margen.arr}" x2="${margen.izq}" y2="${margen.arr+altoGraf}" stroke="#374151"/>
+    <line x1="${margen.izq}" y1="${margen.arr+altoGraf}" x2="${margen.izq+anchoGraf}" y2="${margen.arr+altoGraf}" stroke="#374151"/>
+    <text x="${margen.izq+anchoGraf/2}" y="${altoTotal-10}" font-size="12" text-anchor="middle" fill="#1f2937">Desempleo, u</text>
+    <text x="16" y="${margen.arr+altoGraf/2}" font-size="12" text-anchor="middle" fill="#1f2937" transform="rotate(-90 16 ${margen.arr+altoGraf/2})">Vacantes, v</text>
+
+    <path d="${pathBevBase}" fill="none" stroke="#9ca3af" stroke-width="1.6" stroke-dasharray="5,4"/>
+    <path d="${pathCreacionBase}" fill="none" stroke="#9ca3af" stroke-width="1.2" stroke-dasharray="5,4"/>
+
+    <path d="${pathBev}" fill="none" stroke="#1f4e79" stroke-width="2.6"/>
+    <path d="${pathCreacion}" fill="none" stroke="#1f4e79" stroke-width="1.8" opacity="0.5"/>
+
+    <circle cx="${xEsc(eqBase.u)}" cy="${yEsc(Math.min(eqBase.v,V_MAX))}" r="4" fill="#9ca3af"/>
+    <circle cx="${xEsc(eq.u)}" cy="${yEsc(Math.min(eq.v,V_MAX))}" r="6" fill="#c0392b" stroke="white" stroke-width="1.5"/>
+  `;
+  document.getElementById("grafico").innerHTML = svg;
+
+  document.getElementById("r_theta").textContent = eq.theta.toFixed(3);
+  document.getElementById("r_u").textContent = eq.u.toFixed(4);
+  document.getElementById("r_v").textContent = eq.v.toFixed(4);
+  document.getElementById("r_f").textContent = eq.f.toFixed(3);
+  document.getElementById("r_q").textContent = eq.q.toFixed(3);
+}
+
+// ---------------------------------------------------------------
+// Escenarios predefinidos y controles
+// ---------------------------------------------------------------
+function aplicarEscenario(nombre){
+  let p = {...BASE};
+  if (nombre === "A") p.A = BASE.A * 0.7;
+  if (nombre === "vt") p.vt = BASE.vt * 0.7;
+  if (nombre === "b") p.b = BASE.b * 1.5;
+  fijarParametros(p);
+}
+
+function resetear(){ fijarParametros({...BASE}); }
+
+sliders.forEach(k => document.getElementById(k).addEventListener("input", dibujar));
+
+// inicializar
+fijarParametros({...BASE});
+</script>
+
+</body>
+</html>
