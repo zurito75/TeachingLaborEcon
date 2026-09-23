@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Impuestos a la nómina — Estática comparativa</title>
+<style>
+  :root{
+    --azul:#1f4e79; --rojo:#c0392b; --verde:#27ae60; --gris:#6b7280; --gris-claro:#e5e7eb;
+    --fondo:#f7f8fa; --texto:#1f2937;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family:"Segoe UI", Arial, sans-serif; margin:0; padding:24px;
+    background:var(--fondo); color:var(--texto);
+  }
+  h1{font-size:1.4rem; margin:0 0 4px 0;}
+  .subtitulo{color:var(--gris); margin:0 0 20px 0; font-size:0.95rem;}
+  .layout{
+    display:grid; grid-template-columns: 400px 1fr; gap:24px; align-items:start;
+  }
+  @media (max-width: 900px){ .layout{grid-template-columns: 1fr;} }
+  .panel{
+    background:white; border-radius:12px; padding:18px 20px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.08);
+  }
+  .panel h2{font-size:1rem; margin:0 0 12px 0; color:var(--azul);}
+  .fila{margin-bottom:14px;}
+  .fila label{
+    display:flex; justify-content:space-between; font-size:0.86rem;
+    margin-bottom:4px;
+  }
+  .fila label span.valor{font-weight:600; color:var(--azul);}
+  input[type=range]{width:100%;}
+  .regimenes{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;}
+  .escenarios{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px;}
+  button{
+    cursor:pointer; border:1px solid var(--azul); background:white; color:var(--azul);
+    border-radius:8px; padding:7px 11px; font-size:0.82rem; transition:0.15s;
+  }
+  button:hover{background:var(--azul); color:white;}
+  button.primario{background:var(--azul); color:white;}
+  button.primario:hover{background:#173d5e;}
+  button.secundario{border-color:var(--rojo); color:var(--rojo);}
+  button.secundario:hover{background:var(--rojo); color:white;}
+  table{width:100%; border-collapse:collapse; font-size:0.86rem; margin-top:6px;}
+  td{padding:4px 2px; border-bottom:1px solid var(--gris-claro);}
+  td.etq{color:var(--gris);}
+  td.val{text-align:right; font-weight:600; color:var(--azul);}
+  .leyenda{display:flex; gap:16px; flex-wrap:wrap; font-size:0.82rem; margin-top:10px; color:var(--gris);}
+  .leyenda span{display:inline-flex; align-items:center; gap:6px;}
+  .caja{width:14px; height:3px; display:inline-block;}
+  svg{width:100%; height:auto; background:white; border-radius:10px;}
+  .nota{font-size:0.78rem; color:var(--gris); margin-top:10px; line-height:1.4;}
+  .oculto{display:none;}
+  .separador{border:none; border-top:1px solid var(--gris-claro); margin:14px 0;}
+</style>
+</head>
+<body>
+
+<h1>Impuestos a la nómina: estática comparativa</h1>
+<p class="subtitulo">EC0734 Economía Laboral (EAFIT) — Semana 7, Instituciones y políticas del mercado laboral. Elija un régimen y mueva los deslizadores para ver el efecto de un cambio en el impuesto a la nómina sobre el salario y el empleo de equilibrio.</p>
+
+<div class="layout">
+
+  <div class="panel">
+    <h2>Régimen</h2>
+    <div class="regimenes">
+      <button id="btn-competitivo" class="primario" onclick="cambiarRegimen('competitivo')">Competitivo</button>
+      <button id="btn-salariominimo" onclick="cambiarRegimen('salariominimo')">Salario mínimo vinculante</button>
+      <button id="btn-informal" onclick="cambiarRegimen('informal')">Sector informal</button>
+    </div>
+
+    <h2>Reforma de 2013</h2>
+    <div class="escenarios">
+      <button onclick="aplicarReforma2013()">t: 52.3% → 38.8% (recorte de 13.5pp)</button>
+      <button onclick="resetear()">Restablecer</button>
+    </div>
+
+    <h2>Parámetros</h2>
+    <div class="fila">
+      <label>Tasa de impuesto a la nómina, <i>t</i> <span class="valor" id="v_t"></span></label>
+      <input type="range" id="t" min="0.20" max="0.60" step="0.001">
+    </div>
+
+    <div id="params-competitivo">
+      <div class="fila">
+        <label>Valoración del beneficio, <i>b</i> <span class="valor" id="v_b"></span></label>
+        <input type="range" id="b" min="0.0" max="1.0" step="0.01">
+      </div>
+      <div class="fila">
+        <label>Elasticidad de oferta, <i>&#966;</i> <span class="valor" id="v_phi"></span></label>
+        <input type="range" id="phi" min="0.05" max="1.20" step="0.01">
+      </div>
+      <div class="fila">
+        <label>Elasticidad de demanda, <i>&eta;</i> <span class="valor" id="v_eta"></span></label>
+        <input type="range" id="eta" min="-1.50" max="-0.10" step="0.01">
+      </div>
+    </div>
+
+    <div id="params-salariominimo" class="oculto">
+      <div class="fila">
+        <label>Elasticidad de demanda, <i>&eta;</i> <span class="valor" id="v_eta_sm"></span></label>
+        <input type="range" id="eta_sm" min="-1.50" max="-0.10" step="0.01">
+      </div>
+      <div class="fila">
+        <label>Salario mínimo relativo al competitivo, <i>&#772;w</i>/w* <span class="valor" id="v_wmin"></span></label>
+        <input type="range" id="wmin" min="1.00" max="1.60" step="0.01">
+      </div>
+    </div>
+
+    <div id="params-informal" class="oculto">
+      <div class="fila">
+        <label>Elasticidad demanda formal, <i>&eta;<sub>f</sub></i> <span class="valor" id="v_etaf"></span></label>
+        <input type="range" id="etaf" min="-1.50" max="-0.10" step="0.01">
+      </div>
+      <div class="fila">
+        <label>Elasticidad demanda informal, <i>&eta;<sub>i</sub></i> <span class="valor" id="v_etai"></span></label>
+        <input type="range" id="etai" min="-1.50" max="-0.10" step="0.01">
+      </div>
+      <div class="fila">
+        <label>Participación formal inicial, <i>s<sub>f</sub></i> <span class="valor" id="v_sf"></span></label>
+        <input type="range" id="sf" min="0.10" max="0.90" step="0.01">
+      </div>
+    </div>
+
+    <hr class="separador">
+    <p class="nota">
+      Calibración base: reforma tributaria de 2013 en Colombia (Ley 1607/2012), t<sub>0</sub>=0.523 → t<sub>1</sub>=0.388.
+      Elasticidad de demanda formal: Becerra y Morales (2025), rango estimado [-0.87,-0.53].
+      &#966; y b no tienen estimación disponible para Colombia: son ilustrativos.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2 id="titulo-grafico">Diagrama de brecha tributaria (tax wedge)</h2>
+    <svg id="grafico" viewBox="0 0 640 460" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="leyenda" id="leyenda"></div>
+
+    <h2 style="margin-top:20px;">Equilibrio</h2>
+    <table id="tabla-resultados"></table>
+    <p class="nota" id="nota-formula"></p>
+  </div>
+
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// Parámetros base (calibración: reforma de 2013 en Colombia)
+// ---------------------------------------------------------------
+const BASE = {
+  t0: 0.523, t1: 0.388,
+  t: 0.523,
+  b: 0.50, phi: 0.40, eta: -0.70,
+  eta_sm: -0.70, wmin: 1.15,
+  etaf: -0.70, etai: -0.30, sf: 0.50,
+  w0: 1.0, L0: 1.0
+};
+
+let regimenActual = "competitivo";
+
+const slidersComunes = ["t"];
+const slidersPorRegimen = {
+  competitivo: ["b", "phi", "eta"],
+  salariominimo: ["eta_sm", "wmin"],
+  informal: ["etaf", "etai", "sf"]
+};
+
+function leerParametros(){
+  const p = {t0: BASE.t0, t1: BASE.t1, w0: BASE.w0, L0: BASE.L0};
+  [...slidersComunes, "b","phi","eta","eta_sm","wmin","etaf","etai","sf"].forEach(k=>{
+    const el = document.getElementById(k);
+    if (el) p[k] = parseFloat(el.value);
+  });
+  return p;
+}
+
+function fijarParametros(p){
+  Object.keys(p).forEach(k=>{
+    const el = document.getElementById(k);
+    if (el) el.value = p[k];
+  });
+  actualizarEtiquetas();
+  dibujar();
+}
+
+function actualizarEtiquetas(){
+  const p = leerParametros();
+  document.getElementById("v_t").textContent = (100*p.t).toFixed(1) + "%";
+  document.getElementById("v_b").textContent = p.b.toFixed(2);
+  document.getElementById("v_phi").textContent = p.phi.toFixed(2);
+  document.getElementById("v_eta").textContent = p.eta.toFixed(2);
+  document.getElementById("v_eta_sm").textContent = p.eta_sm.toFixed(2);
+  document.getElementById("v_wmin").textContent = p.wmin.toFixed(2);
+  document.getElementById("v_etaf").textContent = p.etaf.toFixed(2);
+  document.getElementById("v_etai").textContent = p.etai.toFixed(2);
+  document.getElementById("v_sf").textContent = p.sf.toFixed(2);
+}
+
+// ---------------------------------------------------------------
+// Bisección genérica (para el régimen informal)
+// ---------------------------------------------------------------
+function biseccion(f, lo, hi, tol=1e-12, maxIter=200){
+  let flo = f(lo);
+  for (let i=0;i<maxIter;i++){
+    const mid = 0.5*(lo+hi);
+    const fmid = f(mid);
+    if (Math.abs(fmid) < tol || (hi-lo) < tol) return mid;
+    if ((fmid>0) === (flo>0)){ lo = mid; flo = fmid; } else { hi = mid; }
+  }
+  return 0.5*(lo+hi);
+}
+
+// ---------------------------------------------------------------
+// Régimen (a): competitivo — equilibrio EXACTO
+// (mismas fórmulas que impuestos_nomina_model.py)
+// ---------------------------------------------------------------
+function constantesDemandaOferta(p){
+  const KD = p.L0 / Math.pow(p.w0*(1+p.t0), p.eta);
+  const KS = p.L0 / Math.pow(p.w0*(1+p.b*p.t0), p.phi);
+  return {KD, KS};
+}
+
+function equilibrioCompetitivo(t, p){
+  const {KD, KS} = constantesDemandaOferta(p);
+  const logRhs = (Math.log(KS) + p.phi*Math.log(1+p.b*t)) - (Math.log(KD) + p.eta*Math.log(1+t));
+  const w = Math.exp(logRhs / (p.eta - p.phi));
+  const L = KD * Math.pow(w*(1+t), p.eta);
+  return {w, L};
+}
+
+function formulaMarginalCompetitivo(t, p){
+  const {eta, phi, b} = p;
+  const dw = (b*(1+t)*phi - (1+b*t)*eta) / ((eta-phi)*(1+b*t)*(1+t));
+  const dL = eta*phi*(b-1) / ((eta-phi)*(1+b*t)*(1+t));
+  return {dw_w_dt: dw, dL_L_dt: dL};
+}
+
+// ---------------------------------------------------------------
+// Régimen (b): salario mínimo vinculante
+// ---------------------------------------------------------------
+function equilibrioSalarioMinimo(t, p){
+  // KD calibrado con los MISMOS parámetros de demanda (eta_sm), en t0
+  const KD = p.L0 / Math.pow(p.w0*(1+p.t0), p.eta_sm);
+  const eqLibre = (() => {
+    // salario competitivo no restringido, usando phi=BASE.phi, b=BASE.b como referencia ilustrativa
+    const pAux = {...p, eta: p.eta_sm, phi: BASE.phi, b: BASE.b};
+    return equilibrioCompetitivo(t, pAux);
+  })();
+  const wBar = p.wmin * p.w0;
+  const L = KD * Math.pow(wBar*(1+t), p.eta_sm);
+  return {w: wBar, L, vinculante: wBar > eqLibre.w, wLibre: eqLibre.w, KD};
+}
+
+function formulaMarginalSalarioMinimo(t, p){
+  return {dw_w_dt: 0.0, dL_L_dt: p.eta_sm/(1+t)};
+}
+
+// ---------------------------------------------------------------
+// Régimen (c): sector informal
+// ---------------------------------------------------------------
+function constantesInformal(p){
+  const Lm = p.L0;
+  const Df0 = p.sf * Lm;
+  const Di0 = (1-p.sf) * Lm;
+  const KDf = Df0 / Math.pow(p.w0*(1+p.t0), p.etaf);
+  const KDi = Di0 / Math.pow(p.w0, p.etai);
+  return {KDf, KDi, Lm};
+}
+
+function equilibrioInformal(t, p){
+  const {KDf, KDi, Lm} = constantesInformal(p);
+  const exceso = w => KDf*Math.pow(w*(1+t), p.etaf) + KDi*Math.pow(w, p.etai) - Lm;
+  const w = biseccion(exceso, 1e-6, 10*p.w0);
+  const Lf = KDf*Math.pow(w*(1+t), p.etaf);
+  const Li = KDi*Math.pow(w, p.etai);
+  return {w, Lf, Li, Lm, KDf, KDi};
+}
+
+function formulaMarginalInformal(t, p){
+  const eq = equilibrioInformal(t, p);
+  const sf = eq.Lf/eq.Lm, si = eq.Li/eq.Lm;
+  const etaF = p.etaf, etaI = p.etai;
+  const dw = -etaF*sf / ((etaF*sf+etaI*si)*(1+t));
+  const dLf = etaF*etaI*si / ((1+t)*(etaF*sf+etaI*si));
+  return {dw_w_dt: dw, dLf_Lf_dt: dLf, sf, si};
+}
+
+// ---------------------------------------------------------------
+// UI: cambiar régimen
+// ---------------------------------------------------------------
+function cambiarRegimen(nombre){
+  regimenActual = nombre;
+  ["competitivo","salariominimo","informal"].forEach(r=>{
+    document.getElementById("btn-"+r.replace("salariominimo","salariominimo")).classList.toggle("primario", r===nombre);
+  });
+  document.getElementById("params-competitivo").classList.toggle("oculto", nombre!=="competitivo");
+  document.getElementById("params-salariominimo").classList.toggle("oculto", nombre!=="salariominimo");
+  document.getElementById("params-informal").classList.toggle("oculto", nombre!=="informal");
+  dibujar();
+}
+
+function aplicarReforma2013(){
+  document.getElementById("t").value = BASE.t1;
+  actualizarEtiquetas();
+  dibujar();
+}
+
+function resetear(){
+  fijarParametros({...BASE});
+}
+
+// ---------------------------------------------------------------
+// Dibujo: geometría común
+// ---------------------------------------------------------------
+const margen = {izq:60, der:20, arr:20, aba:50};
+const anchoTotal = 640, altoTotal = 460;
+const anchoGraf = anchoTotal - margen.izq - margen.der;
+const altoGraf = altoTotal - margen.arr - margen.aba;
+
+function construirEjesYGrid(xMin, xMax, yMin, yMax, xLabel, yLabel){
+  const xEsc = x => margen.izq + (x-xMin)/(xMax-xMin) * anchoGraf;
+  const yEsc = y => margen.arr + altoGraf - (y-yMin)/(yMax-yMin) * altoGraf;
+  let ejes = "";
+  const nTicksX = 6, nTicksY = 5;
+  for (let i=0;i<=nTicksX;i++){
+    const x = xMin + (xMax-xMin)*i/nTicksX;
+    const xp = xEsc(x);
+    ejes += `<line x1="${xp}" y1="${margen.arr}" x2="${xp}" y2="${margen.arr+altoGraf}" stroke="#eee"/>`;
+    ejes += `<text x="${xp}" y="${margen.arr+altoGraf+18}" font-size="11" text-anchor="middle" fill="#6b7280">${x.toFixed(2)}</text>`;
+  }
+  for (let i=0;i<=nTicksY;i++){
+    const y = yMin + (yMax-yMin)*i/nTicksY;
+    const yp = yEsc(y);
+    ejes += `<line x1="${margen.izq}" y1="${yp}" x2="${margen.izq+anchoGraf}" y2="${yp}" stroke="#eee"/>`;
+    ejes += `<text x="${margen.izq-8}" y="${yp+4}" font-size="11" text-anchor="end" fill="#6b7280">${y.toFixed(2)}</text>`;
+  }
+  const marco = `
+    <rect x="0" y="0" width="${anchoTotal}" height="${altoTotal}" fill="white"/>
+    ${ejes}
+    <line x1="${margen.izq}" y1="${margen.arr}" x2="${margen.izq}" y2="${margen.arr+altoGraf}" stroke="#374151"/>
+    <line x1="${margen.izq}" y1="${margen.arr+altoGraf}" x2="${margen.izq+anchoGraf}" y2="${margen.arr+altoGraf}" stroke="#374151"/>
+    <text x="${margen.izq+anchoGraf/2}" y="${altoTotal-10}" font-size="12" text-anchor="middle" fill="#1f2937">${xLabel}</text>
+    <text x="16" y="${margen.arr+altoGraf/2}" font-size="12" text-anchor="middle" fill="#1f2937" transform="rotate(-90 16 ${margen.arr+altoGraf/2})">${yLabel}</text>
+  `;
+  return {marco, xEsc, yEsc};
+}
+
+function curvaSVG(pts, xEsc, yEsc, yMax){
+  return pts.map((pt,i) => (i===0?"M":"L") + xEsc(pt[0]).toFixed(2) + "," + yEsc(Math.min(pt[1],yMax)).toFixed(2)).join(" ");
+}
+
+// ---------------------------------------------------------------
+// Dibujo por régimen
+// ---------------------------------------------------------------
+function dibujarCompetitivo(p){
+  document.getElementById("titulo-grafico").textContent = "Régimen competitivo: demanda y oferta de trabajo";
+  const {KD, KS} = constantesDemandaOferta(p);
+  const eqBase = equilibrioCompetitivo(p.t0, p);
+  const eq = equilibrioCompetitivo(p.t, p);
+
+  const Lvals = [eqBase.L, eq.L];
+  const Llo = Math.min(...Lvals)*0.6, Lhi = Math.max(...Lvals)*1.4;
+  const wHi = Math.max(eqBase.w, eq.w)*1.8;
+
+  const {marco, xEsc, yEsc} = construirEjesYGrid(Llo, Lhi, 0, wHi, "Empleo, L", "Salario, w");
+
+  const nPts = 120;
+  const Lgrid = Array.from({length:nPts}, (_,i)=> Llo + (Lhi-Llo)*i/(nPts-1));
+  const wDemanda = (L,t) => Math.pow(L/KD, 1/p.eta) / (1+t);
+  const wOferta = (L,t) => Math.pow(L/KS, 1/p.phi) / (1+p.b*t);
+
+  const dBase = Lgrid.map(L=>[L, wDemanda(L,p.t0)]);
+  const sBase = Lgrid.map(L=>[L, wOferta(L,p.t0)]);
+  const dAct = Lgrid.map(L=>[L, wDemanda(L,p.t)]);
+  const sAct = Lgrid.map(L=>[L, wOferta(L,p.t)]);
+
+  const svg = `
+    ${marco}
+    <path d="${curvaSVG(dBase,xEsc,yEsc,wHi)}" fill="none" stroke="#1f4e79" stroke-width="1.6" stroke-dasharray="5,4" opacity="0.55"/>
+    <path d="${curvaSVG(sBase,xEsc,yEsc,wHi)}" fill="none" stroke="#c0392b" stroke-width="1.6" stroke-dasharray="5,4" opacity="0.55"/>
+    <path d="${curvaSVG(dAct,xEsc,yEsc,wHi)}" fill="none" stroke="#1f4e79" stroke-width="2.6"/>
+    <path d="${curvaSVG(sAct,xEsc,yEsc,wHi)}" fill="none" stroke="#c0392b" stroke-width="2.6"/>
+    <circle cx="${xEsc(eqBase.L)}" cy="${yEsc(Math.min(eqBase.w,wHi))}" r="4" fill="#9ca3af"/>
+    <circle cx="${xEsc(eq.L)}" cy="${yEsc(Math.min(eq.w,wHi))}" r="6" fill="black" stroke="white" stroke-width="1.5"/>
+  `;
+  document.getElementById("grafico").innerHTML = svg;
+  document.getElementById("leyenda").innerHTML = `
+    <span><span class="caja" style="background:var(--azul)"></span> Demanda, w(1+t)</span>
+    <span><span class="caja" style="background:var(--rojo)"></span> Oferta, w(1+bt)</span>
+    <span><span class="caja" style="background:#9ca3af"></span> Línea base (t0=52.3%)</span>
+  `;
+
+  const dwPct = 100*(eq.w/eqBase.w - 1), dLPct = 100*(eq.L/eqBase.L - 1);
+  const marg = formulaMarginalCompetitivo(p.t0, p);
+  const dt = p.t - p.t0;
+  document.getElementById("tabla-resultados").innerHTML = `
+    <tr><td class="etq">Salario de equilibrio, w*</td><td class="val">${eq.w.toFixed(3)}</td></tr>
+    <tr><td class="etq">Empleo de equilibrio, L*</td><td class="val">${eq.L.toFixed(3)}</td></tr>
+    <tr><td class="etq">Δ salario vs. línea base (exacto)</td><td class="val">${dwPct>=0?"+":""}${dwPct.toFixed(2)}%</td></tr>
+    <tr><td class="etq">Δ empleo vs. línea base (exacto)</td><td class="val">${dLPct>=0?"+":""}${dLPct.toFixed(2)}%</td></tr>
+    <tr><td class="etq">Δ empleo (aprox. marginal, fórmula II)</td><td class="val">${(100*marg.dL_L_dt*dt)>=0?"+":""}${(100*marg.dL_L_dt*dt).toFixed(2)}%</td></tr>
+  `;
+  document.getElementById("nota-formula").innerHTML =
+    "Ecuaciones (I)-(II) de las slides. Curvas: demanda w(1+t)=K<sub>D</sub>L<sup>1/η</sup>·(1+t) invertida; oferta análoga.";
+}
+
+function dibujarSalarioMinimo(p){
+  document.getElementById("titulo-grafico").textContent = "Salario mínimo vinculante: demanda de trabajo";
+  const pp = {...p, eta_sm: p.eta_sm};
+  const eqBase = equilibrioSalarioMinimo(p.t0, pp);
+  const eq = equilibrioSalarioMinimo(p.t, pp);
+
+  const Lvals = [eqBase.L, eq.L];
+  const Llo = Math.min(...Lvals)*0.6, Lhi = Math.max(...Lvals)*1.4;
+  const wHi = Math.max(eqBase.w, eq.w, eqBase.wLibre)*1.6;
+
+  const {marco, xEsc, yEsc} = construirEjesYGrid(Llo, Lhi, 0, wHi, "Empleo, L", "Salario, w");
+
+  const nPts = 120;
+  const Lgrid = Array.from({length:nPts}, (_,i)=> Llo + (Lhi-Llo)*i/(nPts-1));
+  const wDemanda = (L,t) => Math.pow(L/eqBase.KD, 1/p.eta_sm) / (1+t);
+  const dBase = Lgrid.map(L=>[L, wDemanda(L,p.t0)]);
+  const dAct = Lgrid.map(L=>[L, wDemanda(L,p.t)]);
+
+  const svg = `
+    ${marco}
+    <path d="${curvaSVG(dBase,xEsc,yEsc,wHi)}" fill="none" stroke="#1f4e79" stroke-width="1.6" stroke-dasharray="5,4" opacity="0.55"/>
+    <path d="${curvaSVG(dAct,xEsc,yEsc,wHi)}" fill="none" stroke="#1f4e79" stroke-width="2.6"/>
+    <line x1="${margen.izq}" y1="${yEsc(Math.min(eq.w,wHi))}" x2="${margen.izq+anchoGraf}" y2="${yEsc(Math.min(eq.w,wHi))}" stroke="#c0392b" stroke-width="2.6"/>
+    <circle cx="${xEsc(eqBase.L)}" cy="${yEsc(Math.min(eqBase.w,wHi))}" r="4" fill="#9ca3af"/>
+    <circle cx="${xEsc(eq.L)}" cy="${yEsc(Math.min(eq.w,wHi))}" r="6" fill="black" stroke="white" stroke-width="1.5"/>
+  `;
+  document.getElementById("grafico").innerHTML = svg;
+  document.getElementById("leyenda").innerHTML = `
+    <span><span class="caja" style="background:var(--azul)"></span> Demanda, w(1+t)</span>
+    <span><span class="caja" style="background:var(--rojo)"></span> Salario mínimo, w&#772;</span>
+    <span><span class="caja" style="background:#9ca3af"></span> Línea base (t0=52.3%)</span>
+  `;
+
+  const dLPct = 100*(eq.L/eqBase.L - 1);
+  const marg = formulaMarginalSalarioMinimo(p.t0, {eta_sm:p.eta_sm});
+  const dt = p.t - p.t0;
+  document.getElementById("tabla-resultados").innerHTML = `
+    <tr><td class="etq">Salario mínimo, w&#772;</td><td class="val">${eq.w.toFixed(3)}</td></tr>
+    <tr><td class="etq">Empleo de equilibrio, L*</td><td class="val">${eq.L.toFixed(3)}</td></tr>
+    <tr><td class="etq">¿Vinculante?</td><td class="val">${eq.vinculante ? "Sí" : "No (w̄ &lt; w* competitivo)"}</td></tr>
+    <tr><td class="etq">Δ salario vs. línea base</td><td class="val">0.00%</td></tr>
+    <tr><td class="etq">Δ empleo vs. línea base (exacto)</td><td class="val">${dLPct>=0?"+":""}${dLPct.toFixed(2)}%</td></tr>
+    <tr><td class="etq">Δ empleo (aprox. marginal, fórmula III=η/(1+t))</td><td class="val">${(100*marg.dL_L_dt*dt)>=0?"+":""}${(100*marg.dL_L_dt*dt).toFixed(2)}%</td></tr>
+  `;
+  document.getElementById("nota-formula").innerHTML =
+    "Ecuación (III) de las slides. Si el salario mínimo deja de ser vinculante (w&#772; &lt; w* competitivo), esta lectura ya no aplica: use el régimen competitivo.";
+}
+
+function dibujarInformal(p){
+  document.getElementById("titulo-grafico").textContent = "Sector informal: demanda formal vs. informal";
+  const eqBase = equilibrioInformal(p.t0, p);
+  const eq = equilibrioInformal(p.t, p);
+  const Lm = p.L0;
+
+  const LfLo = Math.min(eqBase.Lf, eq.Lf)*0.6;
+  const LfHi = Lm - Math.max(eqBase.Li, eq.Li)*0.6;
+  const wHi = Math.max(eqBase.w, eq.w)*1.8;
+
+  const {marco, xEsc, yEsc} = construirEjesYGrid(LfLo, LfHi, 0, wHi, "Empleo formal, L_f  (informal = L_m − L_f)", "Salario, w");
+
+  const nPts = 120;
+  const Lfgrid = Array.from({length:nPts}, (_,i)=> LfLo + (LfHi-LfLo)*i/(nPts-1));
+  const wFormal = (Lf,t) => Math.pow(Lf/eqBase.KDf, 1/p.etaf) / (1+t);
+  const wInformal = (Lf) => Math.pow((Lm-Lf)/eqBase.KDi, 1/p.etai);
+
+  const dfBase = Lfgrid.map(Lf=>[Lf, wFormal(Lf,p.t0)]);
+  const dfAct = Lfgrid.map(Lf=>[Lf, wFormal(Lf,p.t)]);
+  const diCurva = Lfgrid.map(Lf=>[Lf, wInformal(Lf)]);
+
+  const svg = `
+    ${marco}
+    <path d="${curvaSVG(dfBase,xEsc,yEsc,wHi)}" fill="none" stroke="#1f4e79" stroke-width="1.6" stroke-dasharray="5,4" opacity="0.55"/>
+    <path d="${curvaSVG(dfAct,xEsc,yEsc,wHi)}" fill="none" stroke="#1f4e79" stroke-width="2.6"/>
+    <path d="${curvaSVG(diCurva,xEsc,yEsc,wHi)}" fill="none" stroke="#27ae60" stroke-width="2.6"/>
+    <circle cx="${xEsc(eqBase.Lf)}" cy="${yEsc(Math.min(eqBase.w,wHi))}" r="4" fill="#9ca3af"/>
+    <circle cx="${xEsc(eq.Lf)}" cy="${yEsc(Math.min(eq.w,wHi))}" r="6" fill="black" stroke="white" stroke-width="1.5"/>
+  `;
+  document.getElementById("grafico").innerHTML = svg;
+  document.getElementById("leyenda").innerHTML = `
+    <span><span class="caja" style="background:var(--azul)"></span> Demanda formal, D_f(w(1+t))</span>
+    <span><span class="caja" style="background:var(--verde)"></span> Demanda informal, D_i(w)</span>
+    <span><span class="caja" style="background:#9ca3af"></span> Línea base (t0=52.3%)</span>
+  `;
+
+  const dwPct = 100*(eq.w/eqBase.w - 1), dLfPct = 100*(eq.Lf/eqBase.Lf - 1);
+  const marg = formulaMarginalInformal(p.t0, p);
+  const dt = p.t - p.t0;
+  document.getElementById("tabla-resultados").innerHTML = `
+    <tr><td class="etq">Salario de equilibrio, w*</td><td class="val">${eq.w.toFixed(3)}</td></tr>
+    <tr><td class="etq">Empleo formal, L_f*</td><td class="val">${eq.Lf.toFixed(3)} (${(100*eq.Lf/Lm).toFixed(1)}%)</td></tr>
+    <tr><td class="etq">Empleo informal, L_i*</td><td class="val">${eq.Li.toFixed(3)} (${(100*eq.Li/Lm).toFixed(1)}%)</td></tr>
+    <tr><td class="etq">Δ salario vs. línea base (exacto)</td><td class="val">${dwPct>=0?"+":""}${dwPct.toFixed(2)}%</td></tr>
+    <tr><td class="etq">Δ empleo formal vs. línea base (exacto)</td><td class="val">${dLfPct>=0?"+":""}${dLfPct.toFixed(2)}%</td></tr>
+    <tr><td class="etq">Δ empleo formal (aprox. marginal, fórmula IV)</td><td class="val">${(100*marg.dLf_Lf_dt*dt)>=0?"+":""}${(100*marg.dLf_Lf_dt*dt).toFixed(2)}%</td></tr>
+  `;
+  document.getElementById("nota-formula").innerHTML =
+    "Ecuación (IV) de las slides. Oferta agregada L_m fija; el equilibrio se resuelve por bisección (no hay forma cerrada si η_f≠η_i).";
+}
+
+function dibujar(){
+  actualizarEtiquetas();
+  const p = leerParametros();
+  if (regimenActual === "competitivo") dibujarCompetitivo(p);
+  else if (regimenActual === "salariominimo") dibujarSalarioMinimo(p);
+  else dibujarInformal(p);
+}
+
+// ---------------------------------------------------------------
+// Inicialización
+// ---------------------------------------------------------------
+[...document.querySelectorAll("input[type=range]")].forEach(el =>
+  el.addEventListener("input", dibujar)
+);
+fijarParametros({...BASE});
+cambiarRegimen("competitivo");
+</script>
+
+</body>
+</html>
